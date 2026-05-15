@@ -1,22 +1,8 @@
-# Hemlock Dwarf Mistletoe Edge Spread
+# Edge spread of hemlock dwarf mistletoe and implications for the group retention silvicultural system
 
-R project with all analyses for project: Edge spread of hemlock dwarf mistletoe and implications for the group retention silvicultural system.
+This repo contains analysis scripts (in R) for the project. See publications below for context, results and descriptions of the reserach methods. Understanding the methods is necessary for understanding the data structure and analyses archived here. Data are archived seperately. To obtain the data, download them here: xxxxxx. Extract the zip folder inside the /data folder. The file structure and naming will align file structure below. 
 
-## PROJECT DESCRIPTION
-
-This research project measured infection patterns of the parasitic plant hemlock dwarf mistletoe (*Arceuthobium tsugense* subsp. *tsugense*; **HDM**), that infects the timber species western hemlock (*Tsuga heterophylla*), at edges separating a mature forest (the infection source) from a regnerating forest. The impetus for the project is to provide a foundation for comparative predictions of HDM infection in clearcut and group retention silvicultural systems. In the clearcut system, all trees in an area are harvested. In group retention, mature trees are retained in patches during harvesting to replicate patterns of mature forest structure that arise from the natural disturbance regime (gap disturbance) and balance timber and ecological objectives. In both systems HDM spreads from infected trees located at mature forest edges. These could be along the cutblock boundary (both clearcut and group retention) or retention patches (just group retention). Because infection originates at these edges, edge infection patterns can be scaled up to predict infection at the stand level with different levels of pre-harvest infection and retention levels/arrangements. Group retention cutblocks have higher edge:area ratios than equivalent clearcuts and therefore are expected to result in higher levels of HDM infection. The project is based in the coastal region of British Columbia, Canada where current guidelines reccomend against group retention in stands with HDM because of the anticipated timber impacts. Edge infection patterns and the stand level infection and timber impacts that underly these guidelines have never been measured. This is the gap the project starts to fill. The project objective is to characterize edge infection patterns; the predictive possiblities described above are left for future work. 
-
-The survey design (Figure 1) and a set of stem maps (plots where trees are represented by actual points in space; Figure 2) are shown below to illustrate the basic format of the data. Each site (n = 11) consisted of a 55.0 m long portion of the edge of a clearcut harvested area. The harvested area must have been cut 20–45 years ago and is called the regenerating component. The adjacent mature forest is termed the mature component; it had to be >100 years-old and harbour severe HDM infection. Hemlock had to be a leading tree species in both components. The mature component was represented by a 10.0 x 55.0 m survey area. The regenerating component was represented by 5.0 m wide, variable length transects that extended perpendicular to edge. Transect length was determined by the infected regenerating tree farthest from the edge. Trees were stem mapped, measured and rated for HDM infection.
-
-![image](https://github.com/user-attachments/assets/4c763611-a4ab-4379-a17f-90e35e9160a3)
-
-*Figure 1. Overview of survey methods*
-
-
-![trees_sl_defence](https://github.com/user-attachments/assets/b2e7c34f-7dd5-426c-a53b-a3fbe53ad245)
-*Figure 2. Stem maps of three sites showing variation in infection patterns*
-
-### Associated thesis
+## SOURCE PUBLICATIONS
 
 Southam, H. (2025). Edge spread of hemlock dwarf mistletoe and implications for the group retention silvicultural system [Text, The University of British Columbia]. http://hdl.handle.net/2429/91122
 
@@ -30,7 +16,7 @@ Southam, H. (2025). Edge spread of hemlock dwarf mistletoe and implications for 
 
 data_dictionary.xlsx
 
-- Excel workbook with dictionaries for each of the datasets used in analysis, except for the BC Government PSP dataset and the climate data from ClimateBC, which have their own dictionaries that are separate files. Only original variables are defined; variables derived in scripts are defined as they are generated.
+- Excel workbook with dictionaries for each of the datasets used in analysis, except for the BC Government PSP dataset and the climate data from ClimateBC, which have their own dictionaries that are separate files. Only original variables are defined; variables derived in scripts are excluded.
 
 psp_full_dictionary.xlsx
 
@@ -62,7 +48,7 @@ ref_tree_data.csv
 
 regen_comp_extra_heights.csv
 
-- Individual tree measurements for trees used to measure average height of codominanant/dominant hemlock at edge spread research sites, when not enough trees were present on a transect to meet our minimum requirement (three per transect).
+- Individual tree measurements for trees used to measure average height of codominanant/dominant hemlock at edge spread research sites, when not enough trees were present on a transect to meet the minimum requirement (three per transect).
 
 transect_data.csv
 
