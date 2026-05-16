@@ -1,6 +1,6 @@
 # Edge spread of hemlock dwarf mistletoe and implications for the group retention silvicultural system
 
-This repo contains analysis scripts (in R) for the project. See publications below for context, results and descriptions of the reserach methods. Understanding the methods is necessary for understanding the data structure and analyses archived here. Data are archived seperately. To obtain the data, download them here: xxxxxx. Extract the zip folder inside the /data folder. The file structure and naming will align file structure below. 
+This repo contains analysis scripts (in R) for the project. See publications below for context, results and descriptions of the research methods. Understanding the methods is necessary for understanding the data structure and analyses archived here. Data are archived seperately. To obtain the data, download them here: xxxxxx. Extract the zip folder inside the /data folder. The file structure and naming will align with the file structure in this code. 
 
 ## SOURCE PUBLICATIONS
 
