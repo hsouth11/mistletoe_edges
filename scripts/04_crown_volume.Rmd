@@ -1202,7 +1202,7 @@ cv_export <- cv_export %>% rename(cv_height = HEIGHT,
                                   cv_u = CV_u)
 
 #Write csv
-# write_csv(cv_export, here("./data/workflow/crown_vol.csv"))
+write_csv(cv_export, here("./data/workflow/crown_vol.csv"))
 
 ####
 #Next, join the crown volume data back to the tree level dataset
@@ -1218,7 +1218,7 @@ t_hdm_export <- t_hdm_export %>%
   relocate(starts_with("cv"), .before = notes)
 
 #Export this:
-# write_csv(t_hdm_export, here("./data/workflow/trees_cv.csv"))
+write_csv(t_hdm_export, here("./data/workflow/trees_cv.csv"))
 ```
 
 ##Make summary table for thesis
