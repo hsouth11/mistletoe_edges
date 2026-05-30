@@ -28,7 +28,7 @@ climate_bc_data_dictionary.pdf
 
 vri_full_data_dictionary.pdf
 
-- This is an additional reference for the BC Government Vegetation Resource Inventory (VRI) dataset (/data/cleaned/vri_c.csv). A dictionary for this dataset is included in the project dictionary (/data/dat_dictionary/data_dictionary.xlsx) because the original VRI dataset has been modified slightly. The original data set was (1) subset to a set of variables that are relevant for this project, (2) ID variables have been added linking VRI polygons to specific research sites and (3) some variables have been corrected to account for differences between the time a research site was measured and the year VRI data is projected to. This file is the original dictionary for the VRI dataset and provides additional details to what is in the project dictionary. 
+- This is an additional reference for the BC Government Vegetation Resource Inventory (VRI) dataset (/data/cleaned/vri_c.csv). A dictionary for this dataset is included in the project dictionary (/data/dat_dictionary/data_dictionary.xlsx) because the original VRI dataset has been modified slightly. The original dataset was modified in the following ways: (1) filtered to a subset of variables that are relevant for this project, (2) ID variables were been added linking VRI polygons to specific research sites and (3) some variables were corrected to account for differences between the time a research site was measured and the year VRI data was projected to. This file is the original dictionary for the VRI dataset and provides additional details to what is in the project dictionary. 
 
 #### /data/raw
 
@@ -90,29 +90,28 @@ hdm_trimb_points.csv
 
 hdm_sites_clim_data.csv
 
-- Climate data for the edge spread research sites. From Climate BC v7.50 for the Normal 1991–2020 period. Reference: Wang et al. (2016). 
-
-Climate BC website: https://climatebc.ca/ 
+- Climate data for the edge spread research sites. From Climate BC v7.50 for the Normal 1991–2020 period.
+- Climate BC website: https://climatebc.ca/ 
+- Source: Wang, T., Hamann, A., Spittlehouse, D., & Carroll, C. (2016). Locally downscaled and spatially customizable climate data for historical and future periods for North America. PloS One, 11(6). https://doi.org/10.1371/journal.pone.0156720
 
 vri_c.csv
 
-- Attribute information of vri polygons overlapping each edge spread field site filtered to relevant fields. Data are projected to 1 Jan 2021. Each component at each site is represented by at least one (and sometimes two) vri polygons.
-
-Forest Analysis and Inventory Branch. (2024). VRI - 2023—Forest Vegetation Composite Rank 1 Layer (R1) [Dataset]. British Columbia Data Catalogue. https://catalogue.data.gov.bc.ca/dataset/2ebb35d8-c82f-4a17-9c96-612ac3532d55
+- Attribute information of vegetation resource inventory (VRI) polygons overlapping each edge spread field site filtered to relevant fields. Data are projected to 1 Jan 2021. Each component at each site is represented by at least one (and sometimes two) VRI polygons.
+- Source: Forest Analysis and Inventory Branch. (2024). VRI - 2023—Forest Vegetation Composite Rank 1 Layer (R1) [Dataset]. British Columbia Data Catalogue. https://catalogue.data.gov.bc.ca/dataset/2ebb35d8-c82f-4a17-9c96-612ac3532d55
 
 seed_disp_smith1966.csv
 
-- Data from Table 1A from Smith (1966) used to build seed dispersal function in seed load proxy (see /scripts/05_seed_load.Rmd).
+- Data from Table 1A from Smith (1966) describing the number of hemlock dwarf mistletoe seeds captured in seed traps set at various distances from an infected source tree. Used to build seed dispersal function in seed load proxy (see /scripts/05_seed_load.Rmd).
+- Source: Smith, R. B. (1966). Hemlock and Larch Dwarf Mistletoe Seed Dispersal. The Forestry Chronicle, 42(4), 395–401. https://doi.org/10.5558/tfc42395-4
 
 /data/cleaned/psp
 
 - BC Government Permanent Sample Plot (PSP) data used to build equations relating hemlock tree height to height to live crown, which feeds into crown volume estimates (see: /scripts/04_crown_volume.Rmd). Accessed 24 Jul 2024. 
-
-Forest Analysis and Inventory Branch. (2024). Forest Inventory Ground Plot Data and Interactive Map [Dataset]. British Columbia Data Catalogue. https://catalogue.data.gov.bc.ca/dataset/824e684b-4114-4a05-a490-aa56332b57f4
+- Source: Forest Analysis and Inventory Branch. (2024). Forest Inventory Ground Plot Data and Interactive Map [Dataset]. British Columbia Data Catalogue. https://catalogue.data.gov.bc.ca/dataset/824e684b-4114-4a05-a490-aa56332b57f4
 
 #### data/workflow
 
-- Placeholder for folder that holds intermediate data objects created in analysis.
+- Placeholder folder that holds intermediate data objects created in analysis.
 
 #### data/mof_footprints
 
@@ -160,7 +159,7 @@ vri_data_cleaning.Rmd
 
 05_seed_load.Rmd
 
-- This script estimates seed load—a proxy for the amount of HDM seed that is hitting a given target tree. There are three pieces in the script: (1) seed production is estimated by combining dwarf mistletoe rating (DMR) and crown volume estimates, (2) the proportion of a tree's seed production that reaches a given distance from the tree stem is estimated with a seed dispersal function and (3) pairs of source and target trees at each site are defined and interception between them is estimated. These three pieces are combined to estimate seed load. Data for the seed dispersal function are from Smith (1966), interception factors are based on Bloomberg et al. (1980) and numerous conceptual ideas take from Robinson et al. (2006). Inputs: ./data/workflow/trees_cv.csv and ./data/cleaned/pspseed_disp_smith1966.csv. Output: ./data/workflow/trees_sl.csv, which feeds into all the data analysis scripts.
+- This script estimates seed load—a proxy for the amount of HDM seed that is hitting a given target tree. There are three pieces in the script: (1) seed production is estimated by combining dwarf mistletoe rating (DMR) and crown volume estimates, (2) the proportion of a tree's seed production that reaches a given distance from the tree stem is estimated with a seed dispersal function and (3) pairs of source and target trees at each site are defined and interception between them is estimated. These three pieces are combined to estimate seed load. Data for the seed dispersal function are from Smith (1966), interception factors are based on Bloomberg et al. (1980) and numerous conceptual ideas take from Robinson et al. (2006). Inputs: ./data/workflow/trees_cv.csv and ./data/cleaned/seed_disp_smith1966.csv. Output: ./data/workflow/trees_sl.csv, which feeds into all the data analysis scripts.
 
 06_exploratory_analysis.Rmd
 
