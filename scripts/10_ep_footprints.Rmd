@@ -157,6 +157,24 @@ fp <- fp %>% select(site_id, EP_name, date_surveyed,
                     yr_surveyed)
 ```
 
+#Generate a project wide bounding box
+This bounding box is the geographical metadata for the project dataset on UBC's
+dataverse repository. 
+```{r}
+#Get the coordinates (this is all that is needed for Borealis)
+st_bbox(st_transform(fp, 4326))
+
+#Check its accurate by plotting it
+fp_ll <- st_transform(fp, 4326)
+proj_box <- st_bbox(fp_ll) |> 
+  st_as_sfc()
+
+tm_basemap("CartoDB.Positron") +
+  tm_shape(proj_box) +
+  tm_borders(col = "red", lwd = 2)
+```
+
+
 #Save
 ```{r}
 #Save
