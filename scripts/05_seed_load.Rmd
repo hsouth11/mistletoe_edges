@@ -1992,27 +1992,110 @@ trees <- trees %>%
          sl_i_nh_all = sl_i_nh_rm + sl_i_nh_rr)
 ```
 
-##Exploratory plots relating seed load to regen tree infection
+##Plots visualizing seed production and seed load
+Seed production. Plot it for live hemlock in the mature component by crown 
+class. 
 ```{r}
-#Plot seed load from mature trees as function of distance from the edge:
-x <- pivot_longer(trees, 
+#Filter trees dataset to live hemlock in mature component
+x <- trees %>% 
+  filter(tree_type == "mature", 
+         spp == "Hw",
+         status %in% c("LS", "LL", "LF"))
+
+#Reorder crown class to an order that makes sense
+x <- x %>% 
+  mutate(crown_class = as.character(crown_class)) %>% 
+  mutate(crown_class = factor(crown_class, levels = c("S", "I", "C", "D")))
+
+p <- ggplot(x, aes(x = crown_class, y = sp)) +
+  geom_jitter(width = 0.2, colour = "grey", alpha = 0.5) +
+  geom_boxplot(fill = NA, outliers = FALSE) +
+  labs(y = "Seed production (unitless)", x = "Crown class") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 11, family = "Times New Roman"),
+        axis.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"))
+p
+```
+
+Seed load. Plot it against distance from the edge. 
+```{r}
+#Filter trees df to live hemlock in the regenerating component
+x <- trees %>% 
+  filter(tree_type == "regen", 
+         spp == "Hw",
+         status %in% c("LS", "LL", "LF"))
+
+#Pivot to separate seed load by source. Helps visualize how much is coming 
+#from mature trees and how much from regen
+x1 <- pivot_longer(trees, 
                   cols = starts_with("sl_i_tot"),
                   names_to = "sl_source",
                   names_prefix = "sl_i_tot",
                   values_to = "sl")
-ggplot(x, aes(x = dist_y_h, y = sl, colour = sl_source)) + 
+
+#Plot
+#Clear that seed load from mature trees is much greater than mature trees
+#This is an artifact of the variable design but also conceptually makes sense
+ggplot(x1, aes(x = dist_y_h, y = sl, colour = sl_source)) + 
   geom_point()
 
-#Plot seed load originating from mature source trees vs dmr
-#Looks sort of promising, there is a slight right trend
-x <- trees %>% 
-  filter(tree_type == "regen" &
-           spp == "Hw" &
-           status %in% c("LS", "LL", "LF"))
+#Chose to use seed load from mature trees with interception (sl_i_tot_rm) in 
+#the ordinal modelling (script 8). Create a plot showing distribution of that.
 
-ggplot(x, aes(x = sl_i_tot_rm, y = factor(dmr, levels = c(0,1,2,3,4,5,6),
-                                          ordered = TRUE))) + 
-  geom_boxplot() 
+#Calculate the median and 95th/5th quantiles in rolling, 5 m intervals across
+#the range of distance from the edge
+dist_seq <- seq(from = 0, to = 45, by = 1)
+rolling_quantiles <- map_dfr(dist_seq, function(d){
+
+  x2 <- x %>%
+    filter(dist_y_h >= d,
+           dist_y_h < d + 5)
+  
+  tibble(dist_mid = d + 2.5,
+         n = nrow(x2),
+         median_sl = median(x2$sl_i_tot_rm, na.rm = TRUE),
+         q5_sl = quantile(x2$sl_i_tot_rm, 0.05, na.rm = TRUE),
+         q95_sl = quantile(x2$sl_i_tot_rm, 0.95, na.rm = TRUE))
+})
+
+rolling_quantiles <- rolling_quantiles %>% 
+  pivot_longer(cols = contains("sl"), 
+               names_to = "metric", 
+               values_to = "value")
+
+#Plot it
+p1 <- ggplot(x, aes(dist_y_h, sl_i_tot_rm)) +
+  geom_point(colour = "grey", alpha = 0.5) +
+  geom_line(data = rolling_quantiles,
+            aes(x = dist_mid, y = value, linetype = metric), 
+            colour = "#104E8B",
+            show.legend = F) +
+  scale_linetype_manual(values = c(q5_sl = "dashed",
+                                   median_sl = "solid",
+                                   q95_sl = "dashed")) +
+  labs(y = "Seed load (unitless)", 
+       x = "Distance from the edge (m)") +
+  theme_classic() +
+    theme(axis.text = element_text(size = 11, family = "Times New Roman"),
+        axis.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"))
+p1
+```
+
+Combine the best seed production and seed load figures into a single, two-panel 
+figure and save. 
+```{r}
+p2 <- ggarrange(p, p1, nrow = 1, widths = c(0.3, 0.7), 
+                labels = c("A", "B"),
+                font.label = list(size = 13,
+                                  family = "Times New Roman",
+                                  face = "bold"))
+p2
+
+#Export this
+ggsave(here("./figures/seed_pro_load.svg"), plot = p2, device = "svg",
+        width = 20, height = 10, units = "cm")
 ```
 
 ##Summary table of seed produciton and seed load for thesis
@@ -2092,7 +2175,7 @@ tbl_sp_sl <- tbl_sp_sl %>%
 # write_csv(tbl_sp_sl, here("./tables/sl_summary.csv"))
 ```
 
-##Export this final data frame
+##Export final data frame
 ```{r}
 #Relocate columns for neatness
 trees <- trees %>% 
