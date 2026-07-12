@@ -2045,7 +2045,7 @@ ggplot(x1, aes(x = dist_y_h, y = sl, colour = sl_source)) +
 
 #Calculate the median and 95th/5th quantiles in rolling, 5 m intervals across
 #the range of distance from the edge
-dist_seq <- seq(from = 0, to = 45, by = 1)
+dist_seq <- seq(from = 0, to = 50, by = 1)
 rolling_quantiles <- map_dfr(dist_seq, function(d){
 
   x2 <- x %>%
@@ -2054,15 +2054,16 @@ rolling_quantiles <- map_dfr(dist_seq, function(d){
   
   tibble(dist_mid = d + 2.5,
          n = nrow(x2),
-         median_sl = median(x2$sl_i_tot_rm, na.rm = TRUE),
-         q5_sl = quantile(x2$sl_i_tot_rm, 0.05, na.rm = TRUE),
-         q95_sl = quantile(x2$sl_i_tot_rm, 0.95, na.rm = TRUE))
+         sl_median = median(x2$sl_i_tot_rm, na.rm = TRUE),
+         sl_p5 = quantile(x2$sl_i_tot_rm, 0.05, na.rm = TRUE),
+         sl_p95 = quantile(x2$sl_i_tot_rm, 0.95, na.rm = TRUE))
 })
 
 rolling_quantiles <- rolling_quantiles %>% 
   pivot_longer(cols = contains("sl"), 
-               names_to = "metric", 
-               values_to = "value")
+               names_to = "metric",
+               values_to = "value",
+               names_prefix = "sl_")
 
 #Plot it
 p1 <- ggplot(x, aes(dist_y_h, sl_i_tot_rm)) +
@@ -2071,9 +2072,9 @@ p1 <- ggplot(x, aes(dist_y_h, sl_i_tot_rm)) +
             aes(x = dist_mid, y = value, linetype = metric), 
             colour = "#104E8B",
             show.legend = F) +
-  scale_linetype_manual(values = c(q5_sl = "dashed",
-                                   median_sl = "solid",
-                                   q95_sl = "dashed")) +
+  scale_linetype_manual(values = c(p5 = "dashed",
+                                   median = "solid",
+                                   p95 = "dashed")) +
   labs(y = "Seed load (unitless)", 
        x = "Distance from the edge (m)") +
   theme_classic() +
@@ -2081,6 +2082,10 @@ p1 <- ggplot(x, aes(dist_y_h, sl_i_tot_rm)) +
         axis.title = element_text(size = 11, family = "Times New Roman",
                                   face = "bold"))
 p1
+
+#Export this
+ggsave(here("./figures/seed_load_dist.svg"), plot = p1, device = "svg",
+        width = 8, height = 6, units = "cm")
 ```
 
 Combine the best seed production and seed load figures into a single, two-panel 
@@ -2098,7 +2103,7 @@ ggsave(here("./figures/seed_pro_load.svg"), plot = p2, device = "svg",
         width = 20, height = 10, units = "cm")
 ```
 
-##Summary table of seed produciton and seed load for thesis
+##Summary table of seed produciton and seed load
 Variables:
   - Seed production (mature trees)
   - Seed load no interception (regen-mat pairs)
@@ -2106,8 +2111,8 @@ Variables:
   - Proportion intercepted (regen-mat pairs)
 Structure: rows = variables, columns = crown classes
 
-Only include seed load from mature source trees because we didn't incoporate 
-seed load from regen-regen pairs in modelling efforts
+Only include seed load from mature source trees because seed load from 
+regen-regen pairs wasn't included in modelling efforts. 
 ```{r}
 #Summarise seed production
 tbl_sp_sl <- trees %>% filter(spp == "Hw" & status %in% c("LS", "LL", "LF"))
@@ -2175,6 +2180,66 @@ tbl_sp_sl <- tbl_sp_sl %>%
 # write_csv(tbl_sp_sl, here("./tables/sl_summary.csv"))
 ```
 
+##Percent of trees experiencing strong seed load
+From a management perspective, timber impacts are expected to separate into two
+groups of trees: 
+(1) trees that are >15 m from the edge OR are <15 m but are healthy/lightly 
+infected at the current time point and not under a high level of seed load will
+mostly escape growth/wood quality impacts
+(2) trees that are <15 m, infected and under high seed load will experience
+impacts to growth and wood quality.
+
+This begs the question: how many trees are in each of these groups? This is all
+speculative, but for the sake of discussion, get a best guess estimate by 
+estimating the % of infected, dominant/codominant trees (using these crown classes 
+because they are future crop trees) < 15 m from the edge at each site that 
+have seed load values > median for all dominant/codominant trees <15 m from 
+the edge. This is a bit circular: the median from the whole dataset is used as 
+a threshold to estimate a percentage at each site. But if the dataset is 
+assumed to represent the true distribution of seed load, its a reasonable guess.
+```{r}
+modelling %>% group_by(crown_class_2) %>% 
+  summarise(mean = mean(dbh),
+            q1 = quantile(dbh, 0.25, na.rm = TRUE),
+            q3 = quantile(dbh, 0.75, na.rm = TRUE)
+            )
+
+#Filter full dataset to two subsets:
+#(1) live dominant/codominant hemlock, < 15 m from the edge
+#note: seed load is not defined for dead trees
+dcd_15 <- trees %>% 
+  filter(spp == "Hw",
+         status %in% c("LS", "LL", "LF"),
+         crown_class_2 == "C",
+         dist_y_h <= 15)
+
+#(2) live, infected, dominant/codominant hemlock, < 15 m from the edge
+dcd_15_inf <- trees %>% 
+  filter(spp == "Hw",
+         status %in% c("LS", "LL", "LF"),
+         hdm_pa == "Y",
+         crown_class_2 == "C",
+         dist_y_h <= 15)
+
+#Find the mean and median of seed load in the first subset
+sl_dcd_15_mean <- mean(dcd_15$sl_i_tot_rm)
+sl_dcd_15_q2 <- quantile(dcd_15$sl_i_tot_rm, 0.5)
+
+#Find the percent of trees in the second subset with seed load values above the
+#mean and median in the first subset
+x <- dcd_15_inf %>% 
+   group_by(site_id) %>% 
+   summarise(n = n(),
+             n_above_mean = sum(sl_i_tot_rm>sl_dcd_15_mean),
+             n_above_q2 = sum(sl_i_tot_rm>sl_dcd_15_q2),
+             perc_mean = n_above_mean/n*100,
+             perc_q2 = n_above_q2/n*100)
+
+#Take a look at these percentages. This is the answer!
+summary(x$perc_mean)
+summary(x$perc_q2)
+```
+
 ##Export final data frame
 ```{r}
 #Relocate columns for neatness
@@ -2184,3 +2249,5 @@ trees <- trees %>%
 #Done. Export this version of the trees object
 write_csv(trees, here("./data/workflow/trees_sl.csv"))
 ```
+
+END
