@@ -1,5 +1,5 @@
 ---
-title: "modelling"
+title: "08_ordinal_regression"
 author: "Hanno Southam"
 date: "`r Sys.Date()`"
 output: html_document
@@ -10,12 +10,12 @@ editor_options:
 READ ME
 This script fits ordinal models that predict DMR from tree level variables. 
 Originally, the intent was to build a model that tested the significance and 
-predictive ability of of tree (dbh, canopy class, seed load, distance from the 
+predictive ability of tree (dbh, canopy class, seed load, distance from the 
 edge) and site (e.g. stem density, climate vars) variables and combinations. 
 Quickly, we ran into model instabilities and had to go with a simpler approach. 
 In the simpler version:
 (1) The modelling objective is only inferential (not predictive)
-(2) DMR is collapsed to a subset of the 6 levels (to treat problems of data 
+(2) DMR is collapsed to a subset of the 7 levels (to treat problems of data 
 scarcity);
 (3) only tree level predictors are considered;
 (4) and site level predictors are all wrapped up into a random site effect. 
@@ -683,7 +683,8 @@ plogis(lo_25)
 ```
 
 ##ggeffects
-The ggeffects package can get predictions for many values of a predictor. 
+Model predictions can either be generated manually or with the {ggeffects} 
+package. In {ggeffects}: 
 - A dataframe is generated with values of a predictor (in this case distance) 
 and corresponding probability of each dmr_f level. Each predictor 
 value-response level combination is its own row. 
@@ -692,7 +693,7 @@ predicted values for.
 - The margin term specifies how to treat variables that aren't of interest
 (i.e. not identified in the "terms" term). In this case, "mean_mode" is 
 specified, which uses the mean (for numeric values) and the mode (= most 
-frequent value for factor and character values. 
+frequent value) for factor and character values. 
 ```{r}
 ?ggeffect
 
@@ -1926,775 +1927,369 @@ tbl_m20_sum <- tbl_m20_sum %>%
 ```
 
 #Understanding variable effects
-The goal of this section is to understand how each predictor influences the 
-response. The {ggeffects} package is designed for doing this and is used for 
-most of the plots here. A predict() function isn't available for clmm objects
-yet and that is required for the {ggeffects} options that allow summaries of
-random effects; so the effect of random effects is done manually, following 
-the tutorial on the {ordinal} package webpage. 
+The goal of this section is to understand how the predictors (distance from 
+the edge, DBH, seed load, random effect) influence the response (the 
+probability of each DMR class P[DMR]). For each variable of interest, a 
+synthetic dataset is created where it varies, while the others are held 
+constant or at some average level. 
 
-Four plots are created:
-(1) The first one shows all variable combinations. It is complicated and got 
-rejected as not that useful for a reader in the feedback from my committee. 
-I've kept it here because it is a true representation of the model behaviour  
-across all the variable combinations represented in the data. 
+Seed load is visualized through its combined effect with distance from the edge 
+and DBH because this is how to interpret the model: P[DMR] depends on distance 
+from the edge and DBH, but at rates that depend on seed load. 
 
-(2) The second uses a single DBH value (the mean of dominant/codominant 
-trees). These are the future crop trees and the goal of the figure is to show 
-how the probability of infection changes with distance from the edge in a 
-seed-load dependent way. 
+Three plots are created:
+(1) P[DMR] x distance from the edge under three seed load profiles 
+(2) P[DMR] x dbh under three seed load values 
+(3) P[DMR] x distance from the edge under three random site effects
 
-(3) The third focuses on the effect of DBH. Two panels are created. One at a 
-fixed distance (7.5 m from the edge), where DBH and seed load interact. The
-second shows predicted probabilities from 20-50 m where, seed load = 0, for 
-different DBH values; the goals of the second panel is to compare the effects
-of DBH and distance. 
+##Plot 1: P[DMR] x dist from edge + seed load
+The goal of this plot is to show P[DMR] changes with increasing distance from
+the edge, under different seed load profiles. 
 
-(4) Shows the magnitude of the random site effect. It generates probabilities 
-for an average tree in average, high infection and low infection sites as a
-function of distance from the edge. 
-
-##Plot 1
-###Select meaningful values of predictors
-The first step is to choose what values of each predictor we want to get 
-predictions of the response at. These should be meaningful values, representing
-the range, or some low, medium, high like scale. Also, only combinations of 
-predictor variables that exist in the data (or are realistic) should appear in 
-the final product. 
-
-Two kinds of value sets are created for each predictor, one set for when it is 
-the focal predictor that has relatively more values and one set for when it 
-is secondary predictor that has relatively fewer values and serves the function 
-of being a grouping or faceting variable. 
-
-The model is fit on scaled versions of the variables. The value sets are created
-using logic about the variable on the original scale and then are transformed to
-the scaled scale. 
-
-Different options choosing and specifying values in {ggeffects} are described 
-in this vignette: https://strengejacke.github.io/ggeffects/articles/introduction_effectsatvalues.html 
-
-####Distance from the edge values
-Distance from the edge is easy. For its set as a focal predictor, do 5m 
-intervals. For its sets a secondary predictor do: 5, 25 and 45m for the dbh
-plots and 2.5, 7.5 and 12.5m for the seed load plots
+First step is to create a meaningful dataset of predictor values to generate
+predicted DMR probabilities from. Here use:
+- Mean DBH of dominant/codominant trees. These are the future crop trees and 
+we want this variable to remain constant, to show the combined effect of 
+distance from the edge and seed load. 
+- 2.5 m intervals of distance from the edge (1.25, 3.75, ...48.75)
+- Median, 5th percentile and 95th percentile of seed load in 2.5 m bins 
+([0, 2.5], [2.5, 5.0],...,[47.5, 50.0]). This will show how the effect of 
+distance from the edge depends on the seed load profile. 
 ```{r}
-#Generate vectors of distances
-val_d1 <- seq(from = 0, to = 50, by = 5)
-val_d2 <- c(5, 25, 45)
-val_d3 <- c(2.5, 7.5, 12.5)
-
-#Scale these values using mean and sd of distance from modelling dataset
-dist_mean <- mean(modelling$dist_y_h)
-dist_sd <- sd(modelling$dist_y_h)
-val_d1 <- (val_d1 - dist_mean)/dist_sd
-val_d2 <- (val_d2 - dist_mean)/dist_sd
-val_d3 <- (val_d3 - dist_mean)/dist_sd
-
-#Compare ranges to check this worked as expected. Look good.
-val_d1
-val_d2
-val_d3
-range(modelling$dist_y_h.s)
-```
-
-####Seed load values
-Seed load is trickier. Its own frequency distribution is severely left skewed 
-because it has so many zeros. And it is structurally related to distance from
-the edge. It is only > 0 for distances < 20m. The model will generate estimates
-for the whole distance range, but the combinations that are actually 
-representative of the data are constrained. 
-
-For its set as a focal predictor: generate a sequence of 50unit interval across
-its range. For its set as a secondary predictor: select values 
-corresponding to 0, a moderate value and a high value. 
-
-With both of these, make sure to remove combinations from final plots that 
-don't exist or are unrealistic in the data. 
-```{r}
-#Plot histogram of seed load
-##Interpretation: set high value at 300 and moderate value at 100 for set when
-##seed load is non-focal predictor
-ggplot(modelling, aes(x = sl_i_tot_rm)) + 
-  geom_histogram(bins = 50)
-
-#Plot seed load against distance from the edge
-##Interpretation: High values only exist at distances <10m and moderate values 
-##at distances <15m. 
-range(modelling$sl_i_tot_rm)
-ggplot(modelling, aes(x = dist_y_h, y = sl_i_tot_rm)) + 
-  geom_point()
-
-#Plot DBH vs seed load
-##Interpretation: high values ren't observed for trees with dbh > 
-##25cm but there is no logical/ecological reason for this. I think its just
-##chance. So get predictions for all combinations. 
-ggplot(modelling, aes(x = dbh, y = sl_i_tot_rm)) + 
-  geom_point()
-
-#Generate vectors of values
-range(modelling$sl_i_tot_rm)
-val_sl1 <- seq(0, 550, by = 50)
-val_sl2 <- c(0, 100, 300)
-
-#Scale these to feed them into the model
-sl_mean <- mean(modelling$sl_i_tot_rm)
-sl_sd <- sd(modelling$sl_i_tot_rm)
-val_sl1 <- (val_sl1 - sl_mean)/sl_sd
-val_sl2 <- (val_sl2 - sl_mean)/sl_sd
-
-#Compare ranges to check this worked as expected. Look good.
-val_sl1
-val_sl2
-range(modelling$sl_i_tot_rm.s)
-```
-
-####DBH values
-DBH has a fairly standard distribution. For its focal value set, can use one 
-of the defaults in {ggeffects} which selects its min, max and quartiles. For 
-when its a non-focal predictor, use the mean value of suppressed, 
-intermediate and codominant trees. 
-```{r}
-#Plot a historgram of DBH
-ggplot(modelling, aes(x=dbh)) + 
-  geom_histogram()
-
-#Generate vectors of values. Only need non-focal set because we can generate 
-#focal set with built in defaults in {ggeffects}
-val_dbh2 <- modelling %>% 
-  group_by(crown_class_2) %>% 
-  summarise(mean_dbh = mean(dbh)) %>% 
-  pull(mean_dbh)
-
-#Scale these to feed them into the model
-dbh_mean <- mean(modelling$dbh)
-dbh_sd <- sd(modelling$dbh)
-val_dbh2 <- (val_dbh2 - dbh_mean)/dbh_sd
-
-#Compare ranges to check this worked as expected. Look good.
-val_dbh2
-range(modelling$dbh.s)
-```
-
-###Generate predictions
-Predictions are the probability of each DMR class at each unique combination of 
-predictors. For each focal variable, we will get predictions across its full 
-value range across each combination of the two non-focal predictors. In 
-practice, this will result in three facet plot. The facet will capture the 
-different levels in one of the non-focal predictors. Shape/line type will 
-capture the different levels in the other non-focal predictor. Colour will 
-differentiate the different DMR levels. All of these predictions are for the 
-population average (i.e. assume random effect is 0).
-
-####Distance from the edge predictions
-Distance from the edge shows up in two places in the model - on its own and in
-interaction with seed load. Because it doesn't interact with dbh, the pattern
-should be the same across the three panels of dbh. But, dbh will change the 
-where each DMR level is centred on the y axis. 
-```{r}
-#Focal predictor: distance from edge
-#Non-focal: seed load, dbh
-#Margin: NA (all variables in model are included in 'terms' argument)
-pr1 <- predict_response(m20, 
-                        terms = c("dist_y_h.s [val_d1]", 
-                                  "sl_i_tot_rm.s[val_sl2]",
-                                  "dbh.s [val_dbh2]"),
-                        margin = "mean_mode") 
-pr1 <- as.data.frame(pr1)
-
-#Create named version of DMR for plotting
-pr1 <- pr1 %>%  
-  mutate(DMR = case_match(response.level,
-                          "1" ~ "0",
-                          "2" ~ "IBLC-2",
-                          "3" ~ "3-5")) %>% 
-  mutate(DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
-
-#Backtransform distance from the edge so it is on the original scale
-pr1 <- pr1 %>% 
-  mutate(dist_y = x*dist_sd + dist_mean)
-
-#Create descriptive version of seed load for plotting
-sl_lev <- levels(pr1$group)
-pr1 <- pr1 %>% 
-  mutate(group = as.character(group)) %>% 
-  mutate(sl = case_match(group,
-                         sl_lev[1] ~ "0",
-                        sl_lev[2] ~ "moderate",
-                        sl_lev[3] ~ "high")) %>% 
-   mutate(sl = factor(sl, levels = c("0", "moderate", "high")))
-
-#Similarly, transform dbh to real values on original scale
-pr1 <- pr1 %>%
-  mutate(dbh = as.character(facet)) %>% 
-  mutate(dbh = round((as.numeric(dbh)*dbh_sd + dbh_mean), 1))
-
-#Create a dbh factor for plotting
-dbh_lev <- unique(pr1$dbh)
-pr1 <- pr1 %>%
-  mutate(
-    dbh_f = case_match(dbh,
-      dbh_lev[1] ~ paste0("dbh = ", dbh, " (S)"),
-      dbh_lev[2] ~ paste0("dbh = ", dbh, " (I)"),
-      dbh_lev[3] ~ paste0("dbh = ", dbh, " (D/C)")))
-dbh_f_lev <- unique(pr1$dbh_f)
-pr1 <- pr1 %>% 
-  mutate(dbh_f = factor(dbh_f, levels = dbh_f_lev))
-levels(pr1$dbh_f)
-
-#The high level of seed load only occurs <=10m from edge and the moderate level
-#<=15m. Remove points beyond that for these two groups. 
-pr1 <- pr1 %>% 
-  filter(!(sl == "high" & dist_y > 10.5)) %>% 
-  filter(!(sl == "moderate" & dist_y > 15.5))
-
-#Plot this
-g_pr1 <- 
-  ggplot(pr1, aes(x = dist_y, y = predicted, color = DMR, shape = sl)) +
-  geom_line(aes(linetype = sl), linewidth = 0.5) +
-  facet_wrap(~dbh_f, ncol = 3) +
-  theme_classic() + 
-  labs(x = "Distance from the edge (m)",
-       y = "Probability",
-       linetype = "Seed load",
-       color = "DMR") + 
-  scale_color_manual(values = col_dmr3) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted"))+
-  theme(legend.background = element_rect(fill = "lightgrey"),
-        legend.key = element_rect(fill = "lightgrey", color = NA),
-        legend.title = element_text(size = 20),
-        legend.text = element_text(size = 16),
-        axis.text = element_text(size = 16),
-        axis.title = element_text(size = 20),
-        strip.text = element_text(size = 16),
-        panel.spacing = unit(0.05, "npc"),
-        plot.margin = unit(c(0, 0, 0.1, 0), "npc"))
-g_pr1
-```
-
-####DBH predictions
-DBH is similar to distance from the edge. It exists on its own and in an 
-interaction with seed load in the model. Its pattern shouldn't change across 
-panels of distance from the edge, but distance from the edge will change where 
-the pattern is centered on the y axis. 
-```{r}
-#Focal predictor: dbh
-#Interactions: seed load, distance from the edge
-#Margin: mean/mode
-pr2 <- predict_response(m20, 
-                        terms = c("dbh.s [quart]", 
-                                  "sl_i_tot_rm.s [val_sl2]",
-                                  "dist_y_h.s [val_d2]")) 
-pr2 <- as.data.frame(pr2)
-
-#Create named version of DMR for plotting
-pr2 <- pr2 %>%  
-  mutate(DMR = case_match(response.level,
-                          "1" ~ "0",
-                          "2" ~ "IBLC-2",
-                          "3" ~ "3-5")) %>% 
-  mutate(DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
-
-#Backtransform dbh so it is on the original scale
-pr2 <- pr2 %>% 
-  mutate(dbh = x*dbh_sd + dbh_mean)
-
-#Create descriptive version of seed load for plotting
-sl_lev <- levels(pr2$group)
-
-pr2 <- pr2 %>% 
-  mutate(group = as.character(group)) %>% 
-  mutate(sl = case_match(group,
-                         sl_lev[1] ~ "0",
-                        sl_lev[2] ~ "moderate",
-                        sl_lev[3] ~ "high")) %>% 
-   mutate(sl = factor(sl, levels = c("0", "moderate", "high")))
-
-#Similarly, transform distance from edge to real values on original scale
-pr2 <- pr2 %>%
-  mutate(dist_y = as.character(facet)) %>% 
-  mutate(dist_y = round((as.numeric(dist_y)*dist_sd + dist_mean), 1))
-
-#Create a distance factor for plotting
-dist_lev <- unique(pr2$dist_y)
-pr2 <- pr2 %>%
-  mutate(
-    dist_f = case_match(dist_y,
-      dist_lev[1] ~ paste0("dist = ", dist_y, "m"),
-      dist_lev[2] ~ paste0("dist = ", dist_y, "m"),
-      dist_lev[3] ~ paste0("dist = ", dist_y, "m")))
-dist_f_lev <- unique(pr2$dist_f)
-pr2 <- pr2 %>% 
-  mutate(dist_f = factor(dist_f, levels = dist_f_lev))
-levels(pr2$dist_f)
-
-#The high level of seed load only occurs <=10m from edge and the moderate level
-#<=15m. That means plotting the high and moderate levels for the 25 and 45m 
-#distances isn't representative. Remove these 
-pr2 <- pr2 %>% 
-  filter(!(sl %in% c("high", "moderate") & 
-             dist_f %in% c(dist_f_lev[2], dist_f_lev[3]))) 
-
-#Generate the plot
-g_pr2 <- 
-  ggplot(pr2, aes(x = dbh, y = predicted, color = DMR)) + 
-  geom_line(aes(linetype = sl), linewidth = 0.5) +
-  facet_wrap(~dist_f, ncol = 3) +
-  theme_classic() + 
-  labs(x = "DBH (cm)",
-       y = "Probability",
-       linetype = "Seed load",
-       color = "DMR") + 
-  scale_color_manual(values = col_dmr3) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
-  theme(legend.background = element_rect(fill = "lightgrey"),
-        legend.key = element_rect(fill = "lightgrey", color = NA),
-        legend.title = element_text(size = 20),
-        legend.text = element_text(size = 16),
-        axis.text = element_text(size = 16),
-        axis.title = element_text(size = 20),
-        strip.text = element_text(size = 16))
-g_pr2
-```
-
-####Seed load
-Seed load is the hardest predictor to interpret. It appears in the model on its
-own and in interactions with distance from the edge and dbh. Seed load is only
-non-zero for distances < 25m so its only relevant to plot it for predictor 
-combinations in that range. 
-```{r}
-#Focal predictor: seed load
-#Interactions: distance from the edge, dbh
-pr3 <- predict_response(m20, 
-                        terms = c("sl_i_tot_rm.s [val_sl1]",
-                                  "dbh.s [val_dbh2]",
-                                  "dist_y_h.s [val_d3]")) 
-pr3 <- as.data.frame(pr3)
-
-#Create named version of DMR for plotting
-pr3 <- pr3 %>%  
-  mutate(DMR = case_match(response.level,
-                          "1" ~ "0",
-                          "2" ~ "IBLC-2",
-                          "3" ~ "3-5")) %>% 
-  mutate(DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
-
-#Backtransform seed load so it is on the original scale
-pr3 <- pr3 %>% 
-  mutate(sl = x*sl_sd + sl_mean)
-
-#Transform distance from edge to real values on original scale
-pr3 <- pr3 %>%
-  mutate(dist_y = as.character(facet)) %>% 
-  mutate(dist_y = round((as.numeric(dist_y)*dist_sd + dist_mean), 1))
-
-#Create a distance factor for plotting
-dist_lev <- unique(pr3$dist_y)
-pr3 <- pr3 %>%
-  mutate(
-    dist_f = case_match(dist_y,
-      dist_lev[1] ~ paste0("dist = ", dist_y, "m"),
-      dist_lev[2] ~ paste0("dist = ", dist_y, "m"),
-      dist_lev[3] ~ paste0("dist = ", dist_y, "m")))
-dist_f_lev <- unique(pr3$dist_f)
-pr3 <- pr3 %>% 
-  mutate(dist_f = factor(dist_f, levels = dist_f_lev))
-levels(pr3$dist_f)
-
-#Do the same for dbh. Transform it to real values on original scale then make
-#a factor
-pr3 <- pr3 %>%
-  mutate(dbh = as.character(group)) %>% 
-  mutate(dbh = round((as.numeric(dbh)*dbh_sd + dbh_mean), 1))
-
-dbh_lev <- unique(pr3$dbh)
-pr3 <- pr3 %>%
-  mutate(
-    dbh_f = case_match(dbh,
-      dbh_lev[1] ~ paste0(dbh, " (S)"),
-      dbh_lev[2] ~ paste0(dbh, " (I)"),
-      dbh_lev[3] ~ paste0(dbh, " (D/C)")))
-dbh_f_lev <- unique(pr3$dbh_f)
-pr3 <- pr3 %>% 
-  mutate(dbh_f = factor(dbh_f, levels = dbh_f_lev))
-levels(pr3$dbh_f)
-
-#Again, we have to filter seed load to only include combinations that exist in 
-#the data. At 2.5m, the full range of seed load values is represented. At 7.5
-#only 0-400 are represented. At 12.5 only 0-200 are represented. 
-pr3 <- pr3 %>% 
-  filter(!(dist_f == dist_f_lev[2] & sl > 400)) %>% 
-  filter(!(dist_f == dist_f_lev[3] & sl > 200))
-
-#Generate the plot
-g_pr3 <- 
-  ggplot(pr3, aes(x = sl, y = predicted, color = DMR)) + 
-  geom_line(aes(linetype = dbh_f), linewidth = 0.5) +
-  facet_wrap(~dist_f, ncol = 3) +
-  theme_classic() + 
-  labs(x = "Seed load (no units)",
-       y = "Probability",
-       linetype = "DBH (cm)",
-       color = "DMR") + 
-  scale_color_manual(values = col_dmr3) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
-  theme(legend.background = element_rect(fill = "lightgrey"),
-        legend.key = element_rect(fill = "lightgrey", color = NA),
-        legend.title = element_text(size = 20),
-        legend.text = element_text(size = 16),
-        axis.text = element_text(size = 16),
-        axis.title = element_text(size = 20),
-        strip.text = element_text(size = 16))
-g_pr3
-```
-
-###Combine plots for three predictor variables
-Here, I'm considering each three panel plot for a predictor variable one plot. 
-The plots share a DMR legend but have a distinct secondary aesthetic. Strategy:
-make each plot a row, create a shared colour legend to put on top and have a 
-distinct legend at the right of each plot. 
-```{r}
-#Save the DMR colour legend:
-leg_dmr <- ggpubr::get_legend(
-  ggplot(pr3, aes(x = sl, y = predicted, color = DMR)) +
-  geom_point() + 
-  geom_line(linewidth = 2.5) +
-  theme_classic() +
-  scale_color_manual(values = col_dmr3) +
-  theme(legend.position = "top",
-        legend.background = element_rect(fill = "lightgrey"),
-        legend.key = element_rect(fill = "lightgrey", color = NA),
-        legend.title = element_text(size = 20),
-        legend.text = element_text(size = 16)),
-  position = "top")
-
-#Recreate the plots but without the colour legend item and adding a 
-#legend justification argument that ensures they are aligned in the combined 
-#plot
-g_pr1 <- g_pr1 + guides(color = "none") + 
-  theme(legend.justification = c(0, 0.5))
-g_pr2 <- g_pr2 + guides(color = "none") + 
-  theme(legend.justification = c(0, 0.5))
-g_pr3 <- g_pr3 + guides(color = "none") + 
-  theme(legend.justification = c(0, 0.5))
-
-#Combine the plots
-g_pr4 <- plot_grid(g_pr1, g_pr2, g_pr3, 
-          nrow = 3, ncol = 1,
-          align = "hv",
-          labels = "AUTO",
-          label_size = 20,
-          hjust = -0.8,
-          vjust = -0.5)
-g_pr4
-?plot_grid
-
-#Add the colour legend
-g_pr5 <- plot_grid(leg_dmr, g_pr4, 
-          nrow = 2, ncol = 1, rel_heights = c(1, 15))
-g_pr5
-
-#Export the graph
-# pdf(here("./figures/var_effects.pdf"), width = 8.5, height = 11)
-# g_pr5
-# dev.off()
-```
-
-##Plot 2
-Select some representative values for predictors
-```{r}
-#For distance from the edge go from 0-50m in 1m steps
-#Generate vectors of distances
-val_d4 <- seq(from = 0, to = 50, by = 1)
-#Scale these values using mean and sd of distance from modelling dataset
-val_d4 <- (val_d4 - dist_mean)/dist_sd
-
-#For seed load, use the three values selected above, representing 0, low and
-#high seed load
-val_sl2
-
-#For dbh, use mean of dominant/codominant trees
-val_dbh3 <- val_dbh2[3]
-```
-
-Generate predictions, then reformat the data frame for plotting
-```{r}
-#Generate predictions
-pr5 <- predict_response(m20, 
-                        terms = c("dist_y_h.s [val_d4]", 
-                                  "sl_i_tot_rm.s[val_sl2]",
-                                  "dbh.s [val_dbh3]"),
-                        margin = "mean_mode")
-
-#Rename variables and transform them back to their original scale
-x <- pr5 %>% 
-  as_tibble() %>% 
-  mutate(sl = as.character(group)) %>% 
-  mutate(sl = as.numeric(sl),
-         DMR = case_match(response.level,
-                          "1" ~ "0",
-                          "2" ~ "IBLC-2",
-                          "3" ~ "3-5")) %>% 
-  mutate(dist_m = x*dist_sd + dist_mean,
-         sl = round(sl*sl_sd + sl_mean, 1),
-         DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5"))) %>%
-  mutate(sl = factor(sl))
-
-levels(x$sl)
-#Remove combinations of variables that aren't represented in the data
-x <- x %>% 
-  mutate(var_comb_real = case_when(
-    sl %in% c("100", "300") & dist_m > 20 ~ "N",
-    .default = "Y")) %>% 
-  filter(var_comb_real == "Y")
-```
-
-Plot it all
-```{r}
-#Plot
-p1 <- ggplot(x, aes(x = dist_m, y = predicted, color = DMR, 
-                linetype = sl)) + 
-  geom_line() +
-  theme_classic() +
-  scale_color_manual(values = col_dmr3) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
-  labs(x = "Distance from edge (m)", y = "Predicited probability",
-       linetype = "Seed load") +
-  theme(legend.position = "inside",
-        legend.position.inside = c(0.8, 0.5),
-        legend.background = element_rect(fill = "lightgrey", colour = NA),
-        legend.box.background = element_rect(fill = "lightgrey", 
-                                             colour = NA), 
-        legend.spacing.y = unit(0, "cm"),
-        legend.key.height = unit(0.3, "cm"),
-        legend.key.width = unit(1, "cm"),
-        legend.key = element_rect(fill = "lightgrey"),
-        axis.text = element_text(size = 11, family = "Times New Roman"),
-        axis.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"),
-        legend.text = element_text(size = 11, family = "Times New Roman"),
-        legend.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"))
-p1
-
-#Generate a second plot of seed load x distance from the edge to show
-#why we only display data up to 20m from edge
-x1 <- modelling %>% 
+#Start by filtering the dataset to dominant and codominant trees. This is the
+#group this plot focuses on. 
+levels(modelling$crown_class_2)
+dcd <- modelling %>% 
   filter(crown_class_2 == "C")
 
-p2 <- ggplot(x1, aes(x = dist_y_h, y = sl_i_tot_rm)) +
-  geom_point(color = "grey") +
+#Define a function to find the seed load values (median, 5th percentile and 
+#95th percentile) for these trees. This also set distance from the edge values
+#correctly. 
+dist_seq <- seq(from = 0, to = 47.5, by = 2.5)
+df1 <- map_dfr(dist_seq, function(d){
+
+  x <- dcd %>%
+    filter(dist_y_h >= d,
+           dist_y_h < d + 2.5)
+  
+  tibble(dist_y_h = d + 1.25,
+         n = nrow(x),
+         sl_median = median(x$sl_i_tot_rm, na.rm = TRUE),
+         sl_p5 = quantile(x$sl_i_tot_rm, 0.05, na.rm = TRUE),
+         sl_p95 = quantile(x$sl_i_tot_rm, 0.95, na.rm = TRUE))
+})
+
+df1 <- df1 %>% 
+  pivot_longer(cols = contains("sl"), 
+               values_to = "sl_i_tot_rm",
+               names_to = "sl_type",
+               names_prefix = "sl_")
+
+#Now find the mean dbh of dominant and codominant trees. Add this as a column 
+#to the dataframe with a constant value. 
+df1$dbh <- mean(dcd$dbh)
+
+#Create scaled versions of the variables. Note this uses the mean and sd from
+#the entire dataset, because that is how the model is defined.
+dist_mean <- mean(modelling$dist_y_h)
+dist_sd <- sd(modelling$dist_y_h)
+sl_mean <- mean(modelling$sl_i_tot_rm)
+sl_sd <- sd(modelling$sl_i_tot_rm)
+dbh_mean <- mean(modelling$dbh)
+dbh_sd <- sd(modelling$dbh)
+
+df1 <- df1 %>% 
+  mutate(dist_y_h.s = (dist_y_h - dist_mean)/dist_sd,
+         sl_i_tot_rm.s = (sl_i_tot_rm - sl_mean)/sl_sd,
+         dbh.s = (dbh - dbh_mean)/dbh_sd)
+```
+
+Generate model predictions from this dataframe. 
+```{r}
+#Calculate the raw interaction terms
+df1 <- df1 %>% 
+  mutate(int_dist_sl = dist_y_h.s*sl_i_tot_rm.s,
+         int_dbh_sl = dbh.s*sl_i_tot_rm.s)
+
+#Calculate logit odds for P(DMR<=0) and P(DMR<= IBLC-2) 
+coef_m20 <- coef(m20)
+df1 <- df1 %>% 
+  mutate(lo_0 = coef_m20[1] - coef_m20[3]*dist_y_h.s - 
+           coef_m20[4]*dbh.s - coef_m20[5]*sl_i_tot_rm.s -
+           coef_m20[6]*int_dist_sl - coef_m20[7]*int_dbh_sl,
+         lo_IBLC2 = coef_m20[2] - coef_m20[3]*dist_y_h.s - 
+           coef_m20[4]*dbh.s - coef_m20[5]*sl_i_tot_rm.s -
+           coef_m20[6]*int_dist_sl - coef_m20[7]*int_dbh_sl)
+
+#Take the inverse logit to get cumulative probabilities
+df1 <- df1 %>% 
+  mutate(cp_0 = plogis(lo_0),
+         cp_IBLC2 = plogis(lo_IBLC2))
+
+#Calculate exact probabilities of each DMR levels from cumulative probabilities
+df1 <- df1 %>% 
+  mutate(p_0 = cp_0,
+         p_IBLC_2 = cp_IBLC2 - cp_0,
+         p_3_5 = 1 - cp_IBLC2)
+```
+
+Plot it.
+```{r}
+#Lengthen dataframe so probabilities are a single column. Needed for plotting
+df2 <- df1 %>% 
+  pivot_longer(cols = starts_with("p_"),
+               values_to = "prob",
+               names_to = "DMR",
+               names_prefix = "p_") %>% 
+  mutate(DMR = case_match(DMR,
+                          "0" ~ "0",
+                          "3_5" ~ "3-5",
+                          "IBLC_2" ~ "IBLC-2")) %>% 
+  mutate(DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
+
+#Create a version of the seed load variable for plotting
+df2 <- df2 %>% 
+  mutate(sl_type_g = case_match(sl_type,
+                                "median" ~ "SL[P50]",
+                                "p5" ~ "SL[P5]",
+                                "p95" ~ "SL[P95]")) %>% 
+  mutate(sl_type_g = factor(sl_type_g, levels = c("SL[P50]", "SL[P5]", "SL[P95]")))
+
+#Version 1, everything in a single plot
+g_dist1 <- ggplot(df2, aes(x = dist_y_h, y=prob)) +
+  geom_line(aes(color = DMR, linetype = sl_type)) + 
   theme_classic() +
-  labs(x = "Distance from edge (m)", y = "Seed load (unitless)") +
-  theme(axis.text = element_text(size = 11, family = "Times New Roman"),
-        axis.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"),
-        legend.text = element_text(size = 11, family = "Times New Roman"),
-        legend.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"))
-p2
-
-p3 <- ggarrange(p1, p2, nrow = 2, align = "v", 
-                labels = "AUTO", font.label = list(size = 13, 
-                                          family = "Times New Roman",
-                                          face = "bold"))
-p3
-
-#Export this
-# ggsave(here("./figures/var_eff_dist.svg"), plot = p3, device = "svg",
-#        width = 5, height = 5, units = "in")
-```
-
-##Plot 3: DBH focus
-Vision: two panel plot
-Panel 1: x = DBH (across range), y = Probabilities, colour = DMR class,
-linetype = seed load. All of this located at 7.5m from edge. 
-Panel 2: x = distance from edge (from 20-50m), y = Probabilities, colour = 
-DMR class, linetype = DBH. All of this at seed load = 0. 
-
-Select some representative values for predictors
-```{r}
-#For distance from the edge: panel 1 = 7.5 m, panel 2 = 20-50 m in 1 m 
-#intervals
-val_d5 <- 7.5
-val_d6 <- seq(from = 20, to = 50, by = 1)
-#Scale these values using mean and sd of distance from modelling dataset
-val_d5 <- (val_d5 - dist_mean)/dist_sd
-val_d6 <- (val_d6 - dist_mean)/dist_sd
-
-#For seed load: panel 1 = three values representing 0, low and high seed load; 
-#panel 2 = 0
-val_sl2 <- c(0, 100, 300)
-val_sl3 <- c(0)
-#Scale these values
-val_sl2 <- (val_sl2 - sl_mean)/sl_sd
-val_sl3 <- (val_sl3 - sl_mean)/sl_sd
-
-#For dbh: panel 1 = ; for 
-#panel 2 = values corresponding to mean of each crown class
-range(modelling$dbh)
-val_dbh4 <- seq(from = 4, to = 40, by = 1)
-val_dbh2_orig <- modelling %>% 
-  group_by(crown_class_2) %>% 
-  summarise(mean_dbh = mean(dbh)) %>% 
-  pull(mean_dbh)
-#Scale these
-val_dbh4 <- (val_dbh4 - dbh_mean)/dbh_sd
-val_dbh2 <- (val_dbh2_orig - dbh_mean)/dbh_sd
-```
-
-Generate predictions, then reformat the data frame for plotting
-```{r}
-#Generate predictions
-#Panel 1
-pr6 <- predict_response(m20, 
-                        terms = c("dbh.s [val_dbh4]", 
-                                  "sl_i_tot_rm.s [val_sl2]",
-                                  "dist_y_h.s [val_d5]"),
-                        margin = "mean_mode")
-
-#Panel 2
-pr7 <- predict_response(m20, 
-                        terms = c("dist_y_h.s [val_d6]", 
-                                  "dbh.s [val_dbh2]",
-                                  "sl_i_tot_rm.s [val_sl3]"),
-                        margin = "mean_mode")
-
-#Rename variables and transform them back to their original scale
-#Panel 1
-x <- pr6 %>% 
-  as_tibble() %>% 
-  mutate(sl = as.character(group)) %>% 
-  mutate(sl = as.numeric(sl),
-         DMR = case_match(response.level,
-                          "1" ~ "0",
-                          "2" ~ "IBLC-2",
-                          "3" ~ "3-5")) %>% 
-  mutate(dbh = x*dbh_sd + dbh_mean,
-         sl = round(sl*sl_sd + sl_mean, 1),
-         DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5"))) %>%
-  mutate(sl = factor(sl))
-
-#Panel 2
-dbh_lev <- levels(pr7$group)
-x1 <- pr7 %>% 
-  as_tibble() %>% 
-  mutate(DMR = case_match(response.level,
-                          "1" ~ "0",
-                          "2" ~ "IBLC-2",
-                          "3" ~ "3-5"),
-         dbh_f = case_match(group,
-                            dbh_lev[1] ~ paste0(round(val_dbh2_orig[1], 1), 
-                                                " (S)"),
-                            dbh_lev[2] ~ paste0("11.0", " (I)"),
-                            dbh_lev[3] ~ paste0(round(val_dbh2_orig[3], 1), 
-                                                " (D/C)"))) %>% 
-  mutate(dist_m = x*dist_sd + dist_mean,
-         DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
-dbh_lev <- unique(x1$dbh_f)
-x1 <- x1 %>% 
-  mutate(dbh_f = factor(dbh_f, levels = dbh_lev))
-```
-
-Plot it all
-```{r}
-#Panel 1
-p1 <- ggplot(x, aes(x = dbh, y = predicted, color = DMR, 
-                linetype = sl)) + 
-  geom_line() +
-  theme_classic() +
+  scale_linetype_manual(values = c(3, 1, 2)) +
   scale_color_manual(values = col_dmr3) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
-  labs(x = "DBH (cm)", y = "Predicited probability",
+  labs(x = "Distance from the edge (m)",
+       y = "Probability",
        linetype = "Seed load") +
-  theme(legend.position = "top",
-        legend.position.inside = c(0.9, 0.5),
-        legend.background = element_rect(fill = "lightgrey", colour = NA),
-        legend.box.background = element_rect(fill = "lightgrey", 
-                                             colour = NA),
-        legend.key.width = unit(0.75, "cm"),
-        legend.margin = margin(r = 5, l = 5, unit = "pt"),
-        legend.key = element_rect(fill = "lightgrey"),
-        axis.text = element_text(size = 11, family = "Times New Roman"),
-        axis.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"),
-        legend.text = element_text(size = 8, family = "Times New Roman"),
-        legend.title = element_text(size = 8, family = "Times New Roman",
-                                  face = "bold")) +
-  guides(color = "none")
-p1
-
-#Panel 2
-p2 <- ggplot(x1, aes(x = dist_m, y = predicted, color = DMR, 
-                linetype = dbh_f)) + 
-  geom_line() +
-  theme_classic() +
-  scale_color_manual(values = col_dmr3) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
-  labs(x = "Distance from the edge (m)", y = "Predicited probability",
-       linetype = "DBH") +
-  theme(legend.position = "top",
-        legend.position.inside = c(0.9, 0.5),
-        legend.background = element_rect(fill = "lightgrey", colour = NA),
-        legend.box.background = element_rect(fill = "lightgrey", 
-                                             colour = NA),
-        legend.key.width = unit(0.75, "cm"),
-        legend.spacing = unit(0.3, "cm"),
-        legend.margin = margin(r = 5, l = 5, unit = "pt"),
-        legend.key = element_rect(fill = "lightgrey"),
-        axis.text = element_text(size = 11, family = "Times New Roman"),
-        axis.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"),
-        legend.text = element_text(size = 8, family = "Times New Roman"),
-        legend.title = element_text(size = 8, family = "Times New Roman",
-                                  face = "bold")) +
-  guides(colour = "none")
-p2
-
-#Generate a plot with a colour legend for DMR and save that
-p3 <- ggplot(x, aes(x = dbh, y = predicted, color = DMR)) + 
-  geom_line(size = 2) +
-  theme_classic() +
-  scale_color_manual(values = col_dmr3) +
-  labs(x = "DBH (cm)", y = "Predicited probability") +
   theme(legend.position = "right",
-        legend.position.inside = c(0.9, 0.5),
         legend.background = element_rect(fill = "lightgrey", colour = NA),
         legend.box.background = element_rect(fill = "lightgrey", 
                                              colour = NA),
         legend.key = element_rect(fill = "lightgrey"),
+        legend.key.height = unit(0.1, "cm"),
         axis.text = element_text(size = 11, family = "Times New Roman"),
         axis.title = element_text(size = 11, family = "Times New Roman",
                                   face = "bold"),
         legend.text = element_text(size = 11, family = "Times New Roman"),
         legend.title = element_text(size = 11, family = "Times New Roman",
-                                  face = "bold"))
-p3
+                                  face = "bold")) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 2)),
+         linetype = guide_legend(order = 2, override.aes = list(lwd = 0.5)))
+g_dist1
 
-leg_dmr <- ggpubr::get_legend(p3, position = "right")
+#Version 2, faceted by seed load scenario
+g_dist2 <- ggplot(df2, aes(x = dist_y_h, y=prob)) +
+  geom_line(aes(color = DMR)) + 
+  facet_wrap(~sl_type_g, nrow = 3, labeller = label_parsed) +
+  theme_classic() +
+  scale_color_manual(values = col_dmr3) +
+  labs(x = "Distance from the edge (m)",
+       y = "Probability") +
+  scale_y_continuous(
+  limits = c(0, 1),
+  breaks = c(0, 0.25, 0.5, 0.75, 1),
+  labels = c("0", "", "0.5", "", "1.0")) +
+  theme(legend.position = "top",
+        legend.background = element_rect(fill = "lightgrey", colour = NA),
+        legend.box.background = element_rect(fill = "lightgrey", 
+                                             colour = NA),
+        legend.key = element_rect(fill = "lightgrey"),
+        legend.key.height = unit(0.1, "cm"),
+        axis.text = element_text(size = 11, family = "Times New Roman"),
+        axis.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+        legend.text = element_text(size = 11, family = "Times New Roman"),
+        legend.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+         strip.text = element_text(size = 11, family = "Times New Roman",
+                                  margin = margin(0.05, 0.05, 
+                                                  0.05, 0.05, "cm"))) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 2)))
+g_dist2
 
-#Put to panels together
-p4 <- ggarrange(p1, p2, nrow = 2, align = "v", 
-                labels = "AUTO", font.label = list(size = 13, 
-                                          family = "Times New Roman",
-                                          face = "bold"))
-p4
-
-#Add the DMR legend
-p5 <- plot_grid(p4, leg_dmr, 
-          nrow = 1, ncol = 2, rel_widths = c(15, 3))
-p5
-
-#Export
-# ggsave(here("./figures/var_eff_dbh.svg"), plot = p5, device = "svg",
-#        width = 5, height = 6, units = "in")
+#Export this second plot
+ggsave(here("./figures/var_eff_distedge.svg"), plot = g_dist2, device = "svg",
+       width = 8, height = 11, units = "cm")
 ```
 
-##Plot 4: Random effects
-Variation between sites is large in this dataset. Going to quantify it here by
-estimating site effects and then plotting how the distance from edge effect 
-changes with different site effects. I am roughly following this tutorial on 
-the ordinal web page: https://rdrr.io/cran/ordinal/f/inst/doc/clmm2_tutorial.pdf 
+##Plot 2: P[DMR] x DBH + seed load
+The goal of this plot is to show P[DMR] changes with increasing DBH, under 
+different seed load profiles. 
+
+Repeat process for the first plot. Step 1: create a meaningful dataset of 
+predictor values to generate predicted DMR probabilities from. Here use:
+- Distance from the edge = 7.5 m. At distances beyond this, the dbh effect will
+be less evident because the distance from the edge effect will dominate. i.e.,
+all trees will be healthy or lightly infected. 
+- DBH in 1.0 cm intervals from 4.0-40.0 cm (4.0 cm was the min DBH in the field
+sampling protocol; 40 cm is a round number close to the max DBH in the dataset 
+= 41.0 cm)
+- Median, 5th percentile and 95th percentile of seed load at 7.5 m. 
+This will show how the effect of DBH depends on the seed load a tree is exposed 
+to. 
+```{r}
+#Initiate a dataframe with DBH values. This range corresponds to the range of
+#values in the field dataset. Repeat 3 times because there are 3 seed load 
+#scenarios. 
+range(modelling$dbh)
+df1 <- tibble(dbh = seq(from = 4, to = 40, by = 1))
+
+#Add distance from the edge as a constant = 7.5 m
+df1 <- df1 %>% 
+  mutate(dist_y_h = 7.5)
+  
+#Add seed load values
+sl_7.5 <- modelling %>%
+  select(dist_y_h, sl_i_tot_rm) %>%
+  filter(dist_y_h >= 7.5-1.25,
+         dist_y_h < 7.5+1.25) %>% 
+  summarise(sl_median = median(sl_i_tot_rm, na.rm = TRUE),
+            sl_p5 = quantile(sl_i_tot_rm, 0.05, na.rm = TRUE),
+            sl_p95 = quantile(sl_i_tot_rm, 0.95, na.rm = TRUE))
+
+df1 <- df1 %>% 
+  mutate(sl_median = sl_7.5$sl_median,
+         sl_p5 = sl_7.5$sl_p5,
+         sl_p95 = sl_7.5$sl_p95)
+
+#Lengthen the dataset so seed load is a single column
+df1 <- df1 %>% 
+  pivot_longer(cols = contains("sl"), 
+               values_to = "sl_i_tot_rm",
+               names_to = "sl_type",
+               names_prefix = "sl_")
+#Done
+```
+
+Generate model predictions from this dataframe. 
+```{r}
+#Create scaled versions of the variables. Note this uses the mean and sd from
+#the entire dataset, because that is how the model is defined.
+df1 <- df1 %>% 
+  mutate(dist_y_h.s = (dist_y_h - dist_mean)/dist_sd,
+         sl_i_tot_rm.s = (sl_i_tot_rm - sl_mean)/sl_sd,
+         dbh.s = (dbh - dbh_mean)/dbh_sd)
+
+#Calculate the raw interaction terms
+df1 <- df1 %>% 
+  mutate(int_dist_sl = dist_y_h.s*sl_i_tot_rm.s,
+         int_dbh_sl = dbh.s*sl_i_tot_rm.s)
+
+#Calculate logit odds for P(DMR<=0) and P(DMR<= IBLC-2) 
+coef_m20 <- coef(m20)
+df1 <- df1 %>% 
+  mutate(lo_0 = coef_m20[1] - coef_m20[3]*dist_y_h.s - 
+           coef_m20[4]*dbh.s - coef_m20[5]*sl_i_tot_rm.s -
+           coef_m20[6]*int_dist_sl - coef_m20[7]*int_dbh_sl,
+         lo_IBLC2 = coef_m20[2] - coef_m20[3]*dist_y_h.s - 
+           coef_m20[4]*dbh.s - coef_m20[5]*sl_i_tot_rm.s -
+           coef_m20[6]*int_dist_sl - coef_m20[7]*int_dbh_sl)
+
+#Take the inverse logit to get cumulative probabilities
+df1 <- df1 %>% 
+  mutate(cp_0 = plogis(lo_0),
+         cp_IBLC2 = plogis(lo_IBLC2))
+
+#Calculate exact probabilities of each DMR levels from cumulative probabilities
+df1 <- df1 %>% 
+  mutate(p_0 = cp_0,
+         p_IBLC_2 = cp_IBLC2 - cp_0,
+         p_3_5 = 1 - cp_IBLC2)
+```
+
+Plot it.
+```{r}
+#Lengthen dataframe so probabilities are a single column. Needed for plotting
+df2 <- df1 %>% 
+  pivot_longer(cols = starts_with("p_"),
+               values_to = "prob",
+               names_to = "DMR",
+               names_prefix = "p_") %>% 
+  mutate(DMR = case_match(DMR,
+                          "0" ~ "0",
+                          "3_5" ~ "3-5",
+                          "IBLC_2" ~ "IBLC-2")) %>% 
+  mutate(DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
+
+#Create a version of the seed load variable for plotting
+df2 <- df2 %>% 
+  mutate(sl_type_g = case_match(sl_type,
+                                "median" ~ "SL[P50]",
+                                "p5" ~ "SL[P5]",
+                                "p95" ~ "SL[P95]")) %>% 
+  mutate(sl_type_g = factor(sl_type_g, levels = c("SL[P50]", "SL[P5]", "SL[P95]")))
+
+#Version 1, everything in a single plot
+g_dbh1 <- ggplot(df2, aes(x = dbh, y=prob)) +
+  geom_line(aes(color = DMR, linetype = sl_type_g)) + 
+  theme_classic() +
+  scale_linetype_manual(values = c(1, 3, 2)) +
+  scale_color_manual(values = col_dmr3) +
+  labs(x = "DBH (cm)",
+       y = "Probability",
+       linetype = "Seed load") +
+  theme(legend.position = "right",
+        legend.background = element_rect(fill = "lightgrey", colour = NA),
+        legend.box.background = element_rect(fill = "lightgrey", 
+                                             colour = NA),
+        legend.key = element_rect(fill = "lightgrey"),
+        legend.key.height = unit(0.1, "cm"),
+        axis.text = element_text(size = 11, family = "Times New Roman"),
+        axis.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+        legend.text = element_text(size = 11, family = "Times New Roman"),
+        legend.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold")) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 2)),
+         linetype = guide_legend(order = 2, override.aes = list(lwd = 0.5)))
+g_dbh1
+
+#Version 2, faceted by seed load scenario
+g_dbh2 <- ggplot(df2, aes(x = dbh, y=prob)) +
+  geom_line(aes(color = DMR)) + 
+  facet_wrap(~sl_type_g, nrow = 3, labeller = label_parsed) +
+  theme_classic() +
+  scale_color_manual(values = col_dmr3) +
+  labs(x = "DBH (cm)",
+       y = "Probability") +
+  scale_y_continuous(
+  limits = c(0, 1),
+  breaks = c(0, 0.25, 0.5, 0.75, 1),
+  labels = c("0", "", "0.5", "", "1.0")) +
+  theme(legend.position = "top",
+        legend.background = element_rect(fill = "lightgrey", colour = NA),
+        legend.box.background = element_rect(fill = "lightgrey", 
+                                             colour = NA),
+        legend.key = element_rect(fill = "lightgrey"),
+        legend.key.height = unit(0.1, "cm"),
+        axis.text = element_text(size = 11, family = "Times New Roman"),
+        axis.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+        legend.text = element_text(size = 11, family = "Times New Roman"),
+        legend.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+         strip.text = element_text(size = 11, family = "Times New Roman",
+                                  margin = margin(0.05, 0.05, 
+                                                  0.05, 0.05, "cm"))) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 2)))
+g_dbh2
+
+#Export this second plot
+ggsave(here("./figures/var_eff_dbh.svg"), plot = g_dist2, device = "svg",
+       width = 8, height = 11, units = "cm")
+```
+
+##Plot 3: site effects
+Variation between sites is large in this dataset. This could be cause by
+various site-level variables. The goal here is just to show how big of an effect
+it has. Going to do this by estimating the site effects and then plotting how 
+the P[DMR] x distance from edge relationship changes with different site effects. 
+
+I am roughly following this tutorial on the {ordinal} package web page: 
+https://rdrr.io/cran/ordinal/f/inst/doc/clmm2_tutorial.pdf 
 
 Start by estimating the effect for each site. In the tutorial they note: "The 
 judge effects, u(judgei) are not parameters, so they cannot be estimated in the 
@@ -2729,9 +2324,9 @@ g_re1 <- ggplot(ran_ef, aes(x = site, y = ranef)) +
   geom_hline(yintercept = 0, color = "grey", linetype = 1) +
   geom_hline(yintercept = re_5p, color = "grey", linetype = 3) +
   geom_hline(yintercept = re_95p, color = "grey", linetype = 2) +
-  annotate("text", x = 12, y = re_5p + 0.3, label = "High infection site",
+  annotate("text", x = 12, y = re_5p + 0.3, label = "Low infection site",
            family = "Times New Roman", size = 3) +
-  annotate("text", x = 12, y = re_95p + 0.3 , label = "Low infection site",
+  annotate("text", x = 12, y = re_95p + 0.3 , label = "High infection site",
            family = "Times New Roman", size = 3) +
   annotate("text", x = 12, y = 0.3, label = "Average site",
            family = "Times New Roman", size = 3) +
@@ -2750,58 +2345,74 @@ g_re1 <- ggplot(ran_ef, aes(x = site, y = ranef)) +
 g_re1
 
 #Save this plot
-# ggsave(here("./figures/ran_effect_est.svg"), plot = g_re1, device = "svg",
-#         width = 5, height = 3, units = "in")
+ggsave(here("./figures/ran_effect_est.svg"), plot = g_re1, device = "svg",
+        width = 5, height = 3, units = "in")
 ```
 
-The next step is more complex because {ggeffects} and {ordinal} don't work 
-together yet to get predictions under differ random effects. So need to 
-calculate predictions manually. Use the distance from the edge effect as the 
-example because that is most intuitive. The general steps were: create a
-dataset where distance from the edge varies (0-50), seed load is set at its
-mean and dbh is set at the mean for dominant/codominant trees; scale so they 
-match the model inputs; estimate the average (random effect = 0) and extreme 
-(random effect = 95% CI limits) random effects; manually calcualte 
-probabilities of each response; then plot. 
+Now use these random effect estimates to create a meaningful dataset of 
+predictor values to generate predicted DMR probabilities from. Specifically, 
+use:
+- Mean DBH of dominant/codominant trees. These are the future crop trees and 
+we want this variable to remain constant, to isolate the site effect. 
+- Median seed load in 2.5 m bins for dominant/codominant trees. As with 
+DBH, we want this to be "average" so that the site effect can be isolated. 
+- 2.5 m intervals of distance from the edge. 
+- Average (0), 5th percentile and 95th percentile of the random site effects. 
+These show the range of the random site effect distribution. 
 ```{r}
-#Generate a data set with the three predictors
-##Distance from the edge varies, seed load and dbh are at their mean
-dbh_cd <- modelling %>% 
-  filter(crown_class_2 == "C") %>% 
-  summarise(dbh = mean(dbh)) %>% 
-  pull(dbh)
-ran_ef2 <- data.frame(dist_y_h = rep(seq(0, 50, 5), 3),
-                      dbh = rep(dbh_cd, 33),
-                      sl_i_tot_rm = rep(sl_mean, 33))
+#Initiate a dataframe with the function above that calculates seed load values
+#for dominant/codominant trees. Only need the median seed load profile 
+#this time. 
+dist_seq <- seq(from = 0, to = 47.5, by = 2.5)
+df1 <- map_dfr(dist_seq, function(d){
 
-#Scale the predictors
-ran_ef2 <- ran_ef2 %>% 
-  mutate(dist_y_h.s = (dist_y_h - dist_mean)/dist_sd,
-         dbh.s = (dbh - dbh_mean)/dbh_sd,
-         sl_i_tot_rm.s = (sl_i_tot_rm - sl_mean)/sl_sd)
+  x <- dcd %>%
+    filter(dist_y_h >= d,
+           dist_y_h < d + 2.5)
+  
+  tibble(dist_y_h = d + 1.25,
+         n = nrow(x),
+         sl_i_tot_rm = median(x$sl_i_tot_rm, na.rm = TRUE))
+})
 
-#Calculate the raw interaction terms
-ran_ef2 <- ran_ef2 %>% 
-  mutate(int_dist_sl = dist_y_h.s*sl_i_tot_rm.s,
-         int_dbh_sl = dbh.s*sl_i_tot_rm.s)
+#Now find the mean dbh of dominant and codominant trees. Add this as a column 
+#to the dataframe with a constant value. 
+df1$dbh <- mean(dcd$dbh)
 
 #Estimate extreme random effects
 summary(m20)
 re <- qnorm(0.95)*c(-1, 1)*1.986
 
 #Add the random effects to the dataframe
-#Also add a factor version describing the random effect for plotting
-ran_ef2 <- ran_ef2 %>% 
-  mutate(ranef = c(rep(0, 11), rep(re[1], 11), rep(re[2], 11)),
-         ranef_f = factor(c(rep("Average", 11), rep("Low infection", 11), 
-                     rep("High infection", 11)), 
-                     levels = c("Low infection", 
-                                "Average", 
-                                "High infection"))) 
+df1 <- df1 %>% 
+  mutate(re_average = 0,
+         re_low = re[1],
+         re_high = re[2])
+
+#Lengthen so random effects are a single column
+df1 <- df1 %>% 
+  pivot_longer(cols = contains("re"), 
+               values_to = "ranef",
+               names_to = "site_eff",
+               names_prefix = "re_")
+```
+
+Generated predicted probabilities from this dataframe of predictor variables. 
+```{r}
+#Scale the predictors
+df1 <- df1 %>% 
+  mutate(dist_y_h.s = (dist_y_h - dist_mean)/dist_sd,
+         dbh.s = (dbh - dbh_mean)/dbh_sd,
+         sl_i_tot_rm.s = (sl_i_tot_rm - sl_mean)/sl_sd)
+
+#Calculate the raw interaction terms
+df1 <- df1 %>% 
+  mutate(int_dist_sl = dist_y_h.s*sl_i_tot_rm.s,
+         int_dbh_sl = dbh.s*sl_i_tot_rm.s)
 
 #Calculate logit odds for P(DMR<=0) and P(DMR<= IBLC-2) 
 coef_m20 <- coef(m20)
-ran_ef2 <- ran_ef2 %>% 
+df1 <- df1 %>% 
   mutate(lo_0 = coef_m20[1] - coef_m20[3]*dist_y_h.s - 
            coef_m20[4]*dbh.s - coef_m20[5]*sl_i_tot_rm.s -
            coef_m20[6]*int_dist_sl - coef_m20[7]*int_dbh_sl - ranef,
@@ -2810,18 +2421,21 @@ ran_ef2 <- ran_ef2 %>%
            coef_m20[6]*int_dist_sl - coef_m20[7]*int_dbh_sl - ranef)
 
 #Take the inverse logit to get cumulative probabilities
-ran_ef2 <- ran_ef2 %>% 
+df1 <- df1 %>% 
   mutate(cp_0 = plogis(lo_0),
          cp_IBLC2 = plogis(lo_IBLC2))
 
 #Calculate exact probabilities of each DMR levels from cumulative probabilities
-ran_ef2<- ran_ef2 %>% 
+df1 <-df1 %>% 
   mutate(p_0 = cp_0,
          p_IBLC_2 = cp_IBLC2 - cp_0,
          p_3_5 = 1 - cp_IBLC2)
+```
 
-#Lengthen to show the different probabilities
-x <- ran_ef2 %>% 
+Plot it. 
+```{r}
+#Lengthen dataframe so probabilities are a single column. Needed for plotting
+df2 <- df1 %>% 
   pivot_longer(cols = starts_with("p_"),
                values_to = "prob",
                names_to = "DMR",
@@ -2832,14 +2446,26 @@ x <- ran_ef2 %>%
                           "IBLC_2" ~ "IBLC-2")) %>% 
   mutate(DMR = factor(DMR, levels = c("0", "IBLC-2", "3-5")))
 
-g_re2 <- ggplot(x, aes(x = dist_y_h, y=prob)) +
-  geom_line(aes(color = DMR, linetype = ranef_f)) + 
+#Create a version of the site effect variable for plotting
+unique(df1$site_eff)
+df2 <- df2 %>% 
+  mutate(site_eff_g = case_match(site_eff,
+                                "average" ~ "RSE: average",
+                                "high" ~ "RSE: high infection",
+                                "low" ~ "RSE: low infection")) %>% 
+  mutate(site_eff_g = factor(site_eff_g, levels = c("RSE: average", 
+                                                  "RSE: high infection", 
+                                                  "RSE: low infection")))
+
+#Version 1, everything in a single plot
+g_re2 <- ggplot(df2, aes(x = dist_y_h, y=prob)) +
+  geom_line(aes(color = DMR, linetype = site_eff)) + 
   theme_classic() +
-  scale_linetype_manual(values = c(3, 1, 2)) +
+  scale_linetype_manual(values = c(1, 3, 2)) +
   scale_color_manual(values = col_dmr3) +
   labs(x = "Distance from the edge (m)",
        y = "Probability",
-       linetype = "Site type") +
+       linetype = "Site effect") +
   theme(legend.position = "right",
         legend.background = element_rect(fill = "lightgrey", colour = NA),
         legend.box.background = element_rect(fill = "lightgrey", 
@@ -2856,9 +2482,39 @@ g_re2 <- ggplot(x, aes(x = dist_y_h, y=prob)) +
          linetype = guide_legend(order = 2, override.aes = list(lwd = 0.5)))
 g_re2
 
-#Export the graph
-# ggsave(here("./figures/ran_effect_dmr.svg"), plot = g_re2, device = "svg",
-#         width = 6.5, height = 4, units = "in")
+#Version 2, faceted by seed load scenario
+g_re3 <- ggplot(df2, aes(x = dist_y_h, y=prob)) +
+  geom_line(aes(color = DMR)) + 
+  facet_wrap(~site_eff_g, nrow = 3) +
+  theme_classic() +
+  scale_color_manual(values = col_dmr3) +
+  labs(x = "Distance from the edge (m)",
+       y = "Probability") +
+  scale_y_continuous(
+  limits = c(0, 1),
+  breaks = c(0, 0.25, 0.5, 0.75, 1),
+  labels = c("0", "", "0.5", "", "1.0")) +
+  theme(legend.position = "top",
+        legend.background = element_rect(fill = "lightgrey", colour = NA),
+        legend.box.background = element_rect(fill = "lightgrey", 
+                                             colour = NA),
+        legend.key = element_rect(fill = "lightgrey"),
+        legend.key.height = unit(0.1, "cm"),
+        axis.text = element_text(size = 11, family = "Times New Roman"),
+        axis.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+        legend.text = element_text(size = 11, family = "Times New Roman"),
+        legend.title = element_text(size = 11, family = "Times New Roman",
+                                  face = "bold"),
+         strip.text = element_text(size = 11, family = "Times New Roman",
+                                  margin = margin(0.05, 0.05, 
+                                                  0.05, 0.05, "cm"))) +
+  guides(colour = guide_legend(order = 1, override.aes = list(size = 2)))
+g_re3
+
+#Export this second plot
+ggsave(here("./figures/var_eff_siteeff.svg"), plot = g_re3, device = "svg",
+       width = 8, height = 11, units = "cm")
 ```
 
 END
